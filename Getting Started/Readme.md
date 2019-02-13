@@ -10,3 +10,6 @@ When loading is done (about 30 seconds), you'll have a variable in memory that h
 - Code Tokens
 - ... 
 All you need to analyze your solution!
+
+## The other scripts
+are there for you to have examples.. .  Enjoy!
