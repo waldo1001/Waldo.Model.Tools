@@ -1,5 +1,5 @@
 # Load the module
-Import-Module ".\The Magic\NavModelToolsAPI.dll"
+Import-Module (Join-Path $PSScriptRoot "\The Magic\NavModelToolsAPI.dll")
 
 # Check the license - which will open a browser.  Fill in, and "Send Message".  Leave the Personal Key as is!
 Check-License
