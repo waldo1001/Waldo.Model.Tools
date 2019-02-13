@@ -1,7 +1,7 @@
 # Analyzing your 
 
 ## The Magic
-in "The Magic" folder, you'll find the dll that my colleague created (I was only an "inspiration" at that point ;-)).
+in "The Magic" folder, you'll find the dll that my fellow nerd created (I was only useful as a "source of inspiration" ;-)).
 
 The use of the dll is free, but you have to request a license key in order to make it work.  Place the license fee in "The Magic" folder, and you're good to go!
 
