@@ -1,10 +1,12 @@
 #in BC19S, 860 field lengths were changed.  This script restores them.
+$ModuleToolAPIPath = Join-Path $PSScriptRoot "..\The Magic\NavModelToolsAPI.dll"
+import-module $ModuleToolAPIPath -WarningAction SilentlyContinue -Verbose
 
-if (!$modelBC13) {$modelBC13 = Get-NAVObjectModel -NavObjectsTextFile "I:\Hatch\waldo\2019\BC135.txt"}
-if (!$modelDistri) {$modelDistri = Get-NAVObjectModel -NavObjectsTextFile "I:\Hatch\waldo\2019\Distri\DistriUPG.txt"}
+if (!$modelBC13) {$modelBC13 = Get-NAVObjectModel -NavObjectsTextFile "C:\temp\13.3.27233.0-W1.txt" -SkipWhereUsed}
+if (!$modelBC14) {$modelBC14 = Get-NAVObjectModel -NavObjectsTextFile "C:\temp\14.0.29537.31961-W1.txt" -SkipWhereUsed}
+if (!$modelResult) {$modelResult = Get-NAVObjectModel -NavObjectsTextFile "C:\temp\14.0.29537.31961-W1.txt" -SkipWhereUsed}
 
-if (!$FieldsBC13) {$FieldsBC13 = $modelBC13.ObjectElements | Where {($_.ElementType -eq 'Field')}}
-#if (!$FieldsDistri) {$FieldsDistri = $modelDistri.ObjectElements | Where {($_.ElementType -eq 'Field')}}
+if (!$FieldsBC13) {$FieldsBC13 = $modelBC13.ObjectElements | Where {($_.ElementType -eq 'Field' -and ($_.Datatype -like 'Text*' -or $_.Datatype -like 'Code*'))}}
 
 $ChangedFields = @()
 $Count = $FieldsBC13.Count
@@ -14,21 +16,12 @@ foreach($Field13 in $FieldsBC13){
     $i++
     Write-Progress -Activity Progress -Status "$i / $count - $ii"
        
-    $FieldDistri = $modelDistri.GetElement($Field13.FulalName)
-    if ($FieldDistri){
-        if ($Field13.Datatype -ne $FieldDistri.Datatype) {
+    $Field14 = $modelBC14.GetElement($Field13.FullName)
+    if ($Field14){
+        if ($Field13.Datatype -ne $Field14.Datatype) {
             $ii++
 
-            #$ChangedField = New-Object PSObject
-            #$ChangedField | Add-Member -MemberType NoteProperty -Name FullName -Value $Field13.FullName
-            #
-            #$ChangedField | Add-Member -MemberType NoteProperty -Name Action -Value ChangedDatatype
-            #$ChangedField | Add-Member -MemberType NoteProperty -Name From -Value $Field13.Datatype
-            #$ChangedField | Add-Member -MemberType NoteProperty -Name To -Value $FieldDistri.Datatype
-            #
-            #$ChangedFields += $ChangedField
-
-            $modelDistri.GetElement($Field13.FullName).DataType = $Field13.Datatype        
+            $modelResult.GetElement($Field13.FullName).DataType = $Field13.Datatype        
         }   
     } 
 
@@ -37,4 +30,4 @@ foreach($Field13 in $FieldsBC13){
 break
 #export-navobj
 
-Export-NAVObjectModel -ObjectModel $modelDistri -TargetFileName "c:\temp\ReducedVariableLengths.txt"
+Export-NAVObjectModel -ObjectModel $modelResult -TargetFileName "c:\temp\ReducedVariableLengths.txt"
