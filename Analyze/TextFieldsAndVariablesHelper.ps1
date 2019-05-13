@@ -1,9 +1,16 @@
-$File = "C:\temp\14.0.26532.0-W1.txt"
+$File = "c:\temp\ReducedVariableLengths.txt"
 
 $ModuleToolAPIPath = Join-Path $PSScriptRoot "..\The Magic\NavModelToolsAPI.dll"
 import-module $ModuleToolAPIPath -WarningAction SilentlyContinue -Verbose
 
 if (!$Model) {$Model = Get-NAVObjectModel -NavObjectsTextFile $File -TimeExecution}
+
+#All Text-fields
+$modelBC13.ObjectElements | Where {($_.ElementType -eq 'Field' -and $_.Datatype -like 'Text100')} | measure
+$modelBC14.ObjectElements | Where {($_.ElementType -eq 'Field' -and $_.Datatype -like 'Text100')} | measure
+
+$Model.ObjectElements | Where {($_.ElementType -eq 'Field' -and $_.Datatype -like 'Text100')} | measure
+
 
 #All Text-Variables
 $Model.ObjectElements | Where {($_.ElementType -eq 'Variable' -and $_.Datatype -like 'Text*' -and -not ($_.Datatype -eq 'TextConst'))} | select fullname, Length, datatype
