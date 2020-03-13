@@ -1,4 +1,9 @@
 ﻿<#
+  Credits: Ricardo Moinhos
+  Related article: https://ricardomoinhos.com/c-al-to-al-data-upgrade-automation-powershell-script/
+#>
+
+<#
     .SYNOPSIS
     Creates csv file with the tables and fields.
 
