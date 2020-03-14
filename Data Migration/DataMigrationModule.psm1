@@ -1,9 +1,14 @@
 ﻿<#
+  Credits: Ricardo Moinhos
+  Related article: https://ricardomoinhos.com/c-al-to-al-data-upgrade-automation-powershell-script/
+#>
+
+<#
     .SYNOPSIS
     Creates csv file with the tables and fields.
 
     .DESCRIPTION
-    The CreateCALFieldsCSV function creates a csv file with the processed objects and fields. A filter can be specified to select the fields range that should be considered.
+    The CreateCALFieldsCSV function creates a csv file with the processed objects and fields. A filter can be specified to select the tables and fields range that should be considered.
 
     .EXAMPLE
     CreateCALFieldsCSV 'C:\Output\ObjectsAnalysis.csv'
@@ -12,6 +17,10 @@
     .EXAMPLE
     CreateCALFieldsCSV 'C:\Output\ObjectsAnalysis.csv' -fieldFilter '50000..50999'
     Create csv file named ObjectsAnalysis.csv and exports to C:\Output folder, considering tables with fields in range 50000..50999.
+
+    .EXAMPLE
+    CreateCALFieldsCSV 'C:\Output\ObjectsAnalysis.csv' -tableFilter '36|37' -fieldFilter '50000..50999'
+    Create csv file named ObjectsAnalysis.csv and exports to C:\Output folder, considering fields in range 50000..50999, in tables 36 and 37.
 #>
 
 function CreateCALFieldsCSV {
@@ -19,9 +28,11 @@ function CreateCALFieldsCSV {
             [Parameter(Mandatory=$true,Position=0)]
             [string] $csvFilePath,
             [Parameter(Mandatory=$false)]
+            [string] $tableFilter,
+            [Parameter(Mandatory=$false)]
             [string] $fieldFilter,
             [Parameter(Mandatory=$false)]
-            [string] $ignoreFlowFields = $true
+            [string] $skipFlowFields = $true
         )
 
     $tables = $Model.NAVObjects | where {($_.ParentObjectType -eq 'Table')}
@@ -59,7 +70,7 @@ function CreateCALFieldsCSV {
 
     $script:hasSetupFilters = $false
     $script:filters = @()
-    SetupFilters -fieldFilter $fieldFilter
+    SetupFilters -tableFilter $tableFilter -fieldFilter $fieldFilter
 
     foreach ($table in $tables) {
         #Write-Host $table.Name
@@ -67,12 +78,16 @@ function CreateCALFieldsCSV {
         $i++
         Write-Progress -Activity Progress -Status "$i of $totalTables tables processed"
 
+        if (ShouldSkipTable -table $table) {
+            continue
+        }
+
         $hasFields = $false
         $fields = @()
         foreach ($field in $table.Fields) {
             #Write-Host $field.Name
             
-            if (ShouldIgnoreField -field $field -ignoreFlowFields $ignoreFlowFields) {
+            if (ShouldSkipField -field $field -skipFlowFields $skipFlowFields) {
                 continue
             }
 
@@ -97,7 +112,7 @@ function CreateCALFieldsCSV {
     Creates text file with the temporary tables that will support the data migration in C/AL.
 
     .DESCRIPTION
-    The CreateCALTempTables function creates a text file with the temporary tables that will support the data migration in C/AL. A filter can be specified to select the fields range that should be considered.
+    The CreateCALTempTables function creates a text file with the temporary tables that will support the data migration in C/AL. A filter can be specified to select the tables and fields range that should be considered.
 
     .EXAMPLE
     CreateCALTempTables 'C:\Output\CALTempTables.txt'
@@ -105,7 +120,15 @@ function CreateCALFieldsCSV {
 
     .EXAMPLE
     CreateCALTempTables 'C:\Output\CALTempTables.txt' -fieldFilter '50000..50999'
-    Create text file and exports to \CALTempTables.txt file, considering tables with fields in range 50000..50999.
+    Create text file and exports to C:\Output\CALTempTables.txt file, considering tables with fields in range 50000..50999.
+
+    .EXAMPLE
+    CreateCALTempTables 'C:\Output\CALTempTables.txt' -tableField '37' -fieldFilter '50000..50999'
+    Create text file and exports to C:\Output\CALTempTables.txt file, considering fields in range 50000..50999, in table 37.
+
+   .EXAMPLE
+    CreateCALTempTables 'C:\Output\CALTempTables.txt' -fieldFilter '50000..50999' -outputStartId 50100
+    Create text file and exports to C:\Output\CALTempTables.txt file, considering fields in range 50000..50999. The created tables id will start in 50100 (instead of 50000).
 #>
 
 function CreateCALTempTables {
@@ -113,9 +136,13 @@ function CreateCALTempTables {
             [Parameter(Mandatory=$true,Position=0)]
             [string] $CALTempTablesPath,
             [Parameter(Mandatory=$false)]
+            [string] $tableFilter,
+            [Parameter(Mandatory=$false)]
             [string] $fieldFilter,
             [Parameter(Mandatory=$false)]
-            [string] $ignoreFlowFields = $true
+            [string] $skipFlowFields = $true,
+            [Parameter(Mandatory=$false)]
+            [int] $outputStartId = 50000
         )
 
     $tables = $Model.NAVObjects | where {($_.ParentObjectType -eq 'Table')}
@@ -150,21 +177,24 @@ function CreateCALTempTables {
 
     $script:hasSetupFilters = $false
     $script:filters = @()
-    SetupFilters -fieldFilter $fieldFilter
+    SetupFilters -tableFilter $tableFilter -fieldFilter $fieldFilter
 
-    $startId = 50000
     foreach ($table in $tables) {
         #Write-Host $table.Name
 
         $i++
         Write-Progress -Activity Progress -Status "$i of $totalTables tables processed"
 
+        if (ShouldSkipTable -table $table) {
+            continue
+        }
+
         $hasFields = $false
         $fields = @()
         foreach ($field in $table.Fields) {
             #Write-Host $field.Name
             
-            if (ShouldIgnoreField -field $field -ignoreFlowFields $ignoreFlowFields) {
+            if (ShouldSkipField -field $field -skipFlowFields $skipFlowFields) {
                 continue
             }
 
@@ -176,7 +206,7 @@ function CreateCALTempTables {
             continue
         }
         
-        $output = 'OBJECT ' + $table.ParentObjectType + ' ' + $startId + ' Temp ' + $table.Name
+        $output = 'OBJECT ' + $table.ParentObjectType + ' ' + $outputStartId + ' Temp ' + $table.Name
         $writer.WriteLine($output);
         $writer.WriteLine('{');
         $writer.WriteLine('  FIELDS');
@@ -212,7 +242,7 @@ function CreateCALTempTables {
         $writer.WriteLine('}');
         $writer.WriteLine('');
 
-        $startId += 1
+        $outputStartId += 1
     }
     $writer.Close();  
 }
@@ -222,15 +252,24 @@ function CreateCALTempTables {
     Creates text file with the data upgrade codeunit that will support the data migration to C/AL temp tables.
 
     .DESCRIPTION
-    The CreateCALTempDataUpgradeCodeunit function creates text file with the codeunit that will support the data migration to C/AL temp tables. A filter can be specified to select the fields range that should be considered.
+    The CreateCALTempDataUpgradeCodeunit function creates text file with the codeunit that will support the data migration to C/AL temp tables. A filter can be specified to select the tables and fields range that should be considered.
 
     .EXAMPLE
     CreateCALTempDataUpgradeCodeunit 'C:\Output\TempDataMigrationCodeunit.txt'
     Create text file and export to C:\Output\TempDataMigrationCodeunit.txt.
 
     .EXAMPLE
+    CreateCALTempDataUpgradeCodeunit 'C:\Output\TempDataMigrationCodeunit.txt' -outputObjectId 50100
+    Create text file and export to C:\Output\TempDataMigrationCodeunit.txt. Set codeunit id to 50100.
+
+    .EXAMPLE
     CreateCALTempDataUpgradeCodeunit 'C:\Output\TempDataMigrationCodeunit.txt' -fieldFilter '50000..50999'
     Create text file and export to C:\Output\TempDataMigrationCodeunit.txt, considering tables with fields in range 50000..50999.
+
+    .EXAMPLE
+    CreateCALTempDataUpgradeCodeunit 'C:\Output\TempDataMigrationCodeunit.txt' -tableFilter '36' -fieldFilter '50000..50999'
+    Create text file and export to C:\Output\TempDataMigrationCodeunit.txt, considering fields in range 50000..50999, in table 36
+
 #>
 
 function CreateCALTempDataUpgradeCodeunit {
@@ -238,9 +277,13 @@ function CreateCALTempDataUpgradeCodeunit {
             [Parameter(Mandatory=$true,Position=0)]
             [string] $TempDataMigrationCodeunitPath,
             [Parameter(Mandatory=$false)]
+            [string] $tableFilter,
+            [Parameter(Mandatory=$false)]
             [string] $fieldFilter,
             [Parameter(Mandatory=$false)]
-            [string] $ignoreFlowFields = $true
+            [string] $skipFlowFields = $true,
+            [Parameter(Mandatory=$false)]
+            [int] $outputObjectId = 50000
         )
 
     $tables = $Model.NAVObjects | where {($_.ParentObjectType -eq 'Table')}
@@ -255,7 +298,7 @@ function CreateCALTempDataUpgradeCodeunit {
 
     $script:hasSetupFilters = $false
     $script:filters = @()
-    SetupFilters -fieldFilter $fieldFilter
+    SetupFilters -tableFilter $tableFilter -fieldFilter $fieldFilter
 
     $fileMode = [System.IO.FileMode]::Create
     $fileAccess = [System.IO.FileAccess]::Write
@@ -277,7 +320,7 @@ function CreateCALTempDataUpgradeCodeunit {
         return
     }    
 
-    $output = 'OBJECT Codeunit 50000 To Temp Tables Data Upgrade'
+    $output = 'OBJECT Codeunit ' + $outputObjectId + ' To Temp Tables Data Upgrade'
     $writer.WriteLine($output);
     $writer.WriteLine('{');
     $writer.WriteLine('  PROPERTIES');
@@ -299,12 +342,16 @@ function CreateCALTempDataUpgradeCodeunit {
         $i++
         Write-Progress -Activity Progress -Status "$i of $totalTables tables processed"
 
+        if (ShouldSkipTable -table $table) {
+            continue
+        }
+
         $hasFields = $false
         $fields = @()
         foreach ($field in $table.Fields) {
             #Write-Host $field.Name
             
-            if (ShouldIgnoreField -field $field -ignoreFlowFields $ignoreFlowFields) {
+            if (ShouldSkipField -field $field -skipFlowFields $skipFlowFields) {
                 continue
             }
 
@@ -330,20 +377,29 @@ function CreateCALTempDataUpgradeCodeunit {
 
     $writer.Close()
 }
+
 <#
     .SYNOPSIS
     Creates text file with the data upgrade codeunit that will support the data migration to AL.
 
     .DESCRIPTION
-    The CreateALDataUpgradeCodeunit function creates text file with the codeunit that will support the data migration to AL. A filter can be specified to select the fields range that should be considered.
+    The CreateALDataUpgradeCodeunit function creates text file with the codeunit that will support the data migration to AL. A filter can be specified to select the tables and fields range that should be considered.
 
     .EXAMPLE
     CreateALDataUpgradeCodeunit 'C:\Output\ALDataUpgradeCodeunit.al'
     Create text file and export to C:\Output\ALDataUpgradeCodeunit.al file.
 
     .EXAMPLE
+    CreateALDataUpgradeCodeunit 'C:\Output\ALDataUpgradeCodeunit.al' -outputObjectId 50100 
+    Create text file and export to C:\Output\ALDataUpgradeCodeunit.al file. Set codeunit id to 50100.
+
+    .EXAMPLE
     CreateALDataUpgradeCodeunit 'C:\Output\ALDataUpgradeCodeunit.al' -fieldFilter '50000..50999'
     Create text file and export to C:\Output\ALDataUpgradeCodeunit.al file, considering tables with fields in range 50000..50999.
+
+    .EXAMPLE
+    CreateALDataUpgradeCodeunit 'C:\Output\ALDataUpgradeCodeunit.al' -fieldFilter '50000..50999' - tableFilter '3..37|5000'
+    Create text file and export to C:\Output\ALDataUpgradeCodeunit.al file, considering tables in range 3 to 37 and 5000, with fields in range 50000..50999.
 #>
 
 function CreateALDataUpgradeCodeunit {
@@ -351,9 +407,13 @@ function CreateALDataUpgradeCodeunit {
             [Parameter(Mandatory=$true,Position=0)]
             [string] $alFilePath,
             [Parameter(Mandatory=$false)]
+            [string] $tableFilter,
+            [Parameter(Mandatory=$false)]
             [string] $fieldFilter,
             [Parameter(Mandatory=$false)]
-            [string] $ignoreFlowFields = $true
+            [string] $skipFlowFields = $true,
+            [Parameter(Mandatory=$false)]
+            [int] $outputObjectId = 50000
         )
 
     $tables = $Model.NAVObjects | where {($_.ParentObjectType -eq 'Table')}
@@ -368,7 +428,7 @@ function CreateALDataUpgradeCodeunit {
 
     $script:hasSetupFilters = $false
     $script:filters = @()
-    SetupFilters -fieldFilter $fieldFilter
+    SetupFilters -tableFilter $tableFilter -fieldFilter $fieldFilter
 
     $fileMode = [System.IO.FileMode]::Create
     $fileAccess = [System.IO.FileAccess]::Write
@@ -390,7 +450,8 @@ function CreateALDataUpgradeCodeunit {
         return
     }    
 
-    $writer.WriteLine('codeunit 50100 "Data Upgrade Codeunit"');
+    $output = 'codeunit ' + $outputObjectId + ' Data Upgrade Codeunit'
+    $writer.WriteLine($output);
     $writer.WriteLine('{');
     $writer.WriteLine('  Subtype = Upgrade;');
     $writer.WriteLine('');
@@ -406,12 +467,16 @@ function CreateALDataUpgradeCodeunit {
         $i++
         Write-Progress -Activity Progress -Status "$i of $totalTables tables processed"
 
+        if (ShouldSkipTable -table $table) {
+            continue
+        }
+
         $hasFields = $false
         $fields = @()
         foreach ($field in $table.Fields) {
             #Write-Host $field.Name
             
-            if (ShouldIgnoreField -field $field -ignoreFlowFields $ignoreFlowFields) {
+            if (ShouldSkipField -field $field -skipFlowFields $skipFlowFields) {
                 continue
             }
 
@@ -461,21 +526,37 @@ function CreateALDataUpgradeCodeunit {
     $writer.Close();    
 }
 
-function ShouldIgnoreField {
+# Auxiliar methods
+
+function ShouldSkipField {
     Param (
             [Parameter(Mandatory=$true)]
             [System.Object] $field,
             [Parameter(Mandatory=$false)]
-            [string] $ignoreFlowFields = $true
+            [string] $skipFlowFields = $true
         )
 
-    if ($ignoreFlowFields) {
+    if ($skipFlowFields) {
         if (($field.FieldClass -eq "FlowField") -or ($field.FieldClass -eq "FlowFilter")) {
             return $true
         }
     }
     
-    $inRange = $field.FieldNo -in $script:filters
+    $inRange = $field.FieldNo -in $script:fieldFilters
+    return !$inRange
+}
+
+function ShouldSkipTable {
+    Param (
+            [Parameter(Mandatory=$true)]
+            [System.Object] $table
+        )
+    
+    if (!$script:tableFilters) {
+        return $false
+    }
+    
+    $inRange = $table.Id -in $script:tableFilters
     return !$inRange
 }
 
@@ -487,7 +568,17 @@ function SetupFilters {
               $True
             }
             else {
-              Throw "$_ is not a valid field filter. Use .. or | to filter."
+              Throw "$_ is not a valid filter. Use .. or | to filter."
+            }
+          })]
+        [string] $tableFilter,
+        [Parameter(Mandatory=$false)]
+        [ValidateScript({
+            if ($_ -match "^[0-9\|\.]*$") {
+              $True
+            }
+            else {
+              Throw "$_ is not a valid filter. Use .. or | to filter."
             }
           })]
         [string] $fieldFilter
@@ -497,16 +588,32 @@ function SetupFilters {
         return
     }
 
-    if ($fieldFilter -match '[|]+') {
-        $filtersArray = $fieldFilter.Split('|');
-        foreach ($filter in $filtersArray) {
-            $f = invoke-expression $filter
-            $script:filters += $f
-        }
-    } else {
-        $f = invoke-expression $fieldFilter
-        $script:filters += $f
+    if ($tableFilter) {
+      if ($tableFilter -match '[|]+') {
+          $tablesArray = $tableFilter.Split('|');
+          foreach ($table in $tablesArray) {
+              $t = invoke-expression $table
+              $script:tableFilters += $t
+          }
+      } else {
+          $t = invoke-expression $tableFilter
+          $script:tableFilters += $t
+      }
     }
+
+    if ($fieldFilter) {
+        if ($fieldFilter -match '[|]+') {
+            $filtersArray = $fieldFilter.Split('|');
+            foreach ($filter in $filtersArray) {
+                $f = invoke-expression $filter
+                $script:fieldFilters += $f
+            }
+        } else {
+            $f = invoke-expression $fieldFilter
+            $script:fieldFilters += $f
+        }
+    }
+
     $script:hasSetupFilters = $true;
 }
 
