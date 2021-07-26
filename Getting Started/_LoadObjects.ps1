@@ -4,5 +4,4 @@ $ModuleToolAPIPath = Join-Path $PSScriptRoot "..\The Magic\NavModelToolsAPI.dll"
 
 import-module $ModuleToolAPIPath -WarningAction SilentlyContinue -Verbose
 
-$global:Model = Get-NAVObjectModel -NavObjectsTextFile $ObjectsFile -TimeExecution 
-Write-Host $global:Model.NAVObjects.Count
+$Model = Get-NAVObjectModel -NavObjectsTextFile $ObjectsFile -TimeExecution 
