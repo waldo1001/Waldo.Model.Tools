@@ -536,13 +536,17 @@ function ShouldSkipField {
             [string] $skipFlowFields = $true
         )
 
+    if (!$script:fieldFilters) {
+        return $false
+    }
+    
     if ($skipFlowFields) {
         if (($field.FieldClass -eq "FlowField") -or ($field.FieldClass -eq "FlowFilter")) {
             return $true
         }
     }
     
-    $inRange = $field.FieldNo -in $script:fieldFilters
+    $inRange = $script:fieldFilters.Contains($field.FieldNo)
     return !$inRange
 }
 
@@ -556,7 +560,7 @@ function ShouldSkipTable {
         return $false
     }
     
-    $inRange = $table.Id -in $script:tableFilters
+    $inRange = $script:tableFilters.Contains($table.Id)
     return !$inRange
 }
 
@@ -589,32 +593,43 @@ function SetupFilters {
     }
 
     if ($tableFilter) {
-      if ($tableFilter -match '[|]+') {
+        $script:tableFilters = [System.Collections.ArrayList]::new()
+        if ($tableFilter -match '[|]+') {
           $tablesArray = $tableFilter.Split('|');
           foreach ($table in $tablesArray) {
               $t = invoke-expression $table
-              $script:tableFilters += $t
-          }
-      } else {
-          $t = invoke-expression $tableFilter
-          $script:tableFilters += $t
-      }
+              [void]$tableFilters.Add($t)
+          }          
+        } else {
+            $t = invoke-expression $tableFilter
+            [void]$tableFilters.Add($t)
+        }
+
+        $script:tableFilters = Flatten($tableFilters)
     }
 
     if ($fieldFilter) {
+        $script:fieldFilters = [System.Collections.ArrayList]::new()
         if ($fieldFilter -match '[|]+') {
             $filtersArray = $fieldFilter.Split('|');
             foreach ($filter in $filtersArray) {
                 $f = invoke-expression $filter
-                $script:fieldFilters += $f
+                [void]$fieldFilters.Add($f)
             }
         } else {
             $f = invoke-expression $fieldFilter
-            $script:fieldFilters += $f
+            [void]$fieldFilters.Add($f)
         }
+        
+        $script:fieldFilters = Flatten($fieldFilters)
     }
 
     $script:hasSetupFilters = $true;
+}
+
+function Flatten($a)
+{
+    ,@($a | % {$_})
 }
 
 Export-ModuleMember -Function CreateCALFieldsCSV
